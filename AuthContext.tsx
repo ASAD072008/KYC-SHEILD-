@@ -78,13 +78,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await signInWithPopup(auth, provider);
     } catch (error: any) {
-      console.error("Login failed", error);
-      
-      // Handle Popup Closed / Cancelled
+      // Handle Popup Closed / Cancelled (Benign)
       if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
         console.log("User cancelled login popup.");
-        return; // Benign error, user just closed the window
+        return; 
       }
+
+      console.error("Login failed", error);
 
       // Handle Popup Blocked
       if (error.code === 'auth/popup-blocked') {
