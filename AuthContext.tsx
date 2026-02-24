@@ -109,7 +109,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const msg = "Login failed: Google Sign-In is not enabled in the Firebase Console.";
         setConfigError(msg);
       } else if (error.code === 'auth/unauthorized-domain') {
-        const msg = "Login failed: This domain is not authorized. Please add this domain (e.g., localhost) to the Authorized Domains list in the Firebase Console -> Authentication -> Settings.";
+        const domain = window.location.hostname;
+        const msg = `Login failed: Domain "${domain}" is not authorized. Go to Firebase Console -> Authentication -> Settings -> Authorized Domains and add "${domain}".`;
         setConfigError(msg);
       } else {
         setConfigError(`Login failed: ${error.message}`);
