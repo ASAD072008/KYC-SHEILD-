@@ -45,7 +45,7 @@ export const Navbar: React.FC = () => {
                         </button>
                     )}
 
-                    <a href="https://github.com" target="_blank" rel="noreferrer" className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 transition flex items-center gap-2">
+                    <a href="https://github.com/ASAD072008/KYC-SHEILD-.git" target="_blank" rel="noreferrer" className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 transition flex items-center gap-2">
                         <i className="fa-brands fa-github"></i> Source Code
                     </a>
                 </div>

@@ -64,6 +64,10 @@ export interface AIAnalysisResult {
 
 export const analyzeFaceFrame = async (base64Image: string): Promise<AIAnalysisResult> => {
     try {
+        // Use the standard GEMINI_API_KEY for free tier models
+        const apiKey = process.env.GEMINI_API_KEY || '';
+        const ai = new GoogleGenAI({ apiKey });
+
         // Remove the data URL prefix to get just the base64 string
         const base64Data = base64Image.split(',')[1];
 
@@ -106,7 +110,21 @@ export const analyzeFaceFrame = async (base64Image: string): Promise<AIAnalysisR
         const text = response.text;
         if (!text) throw new Error("No response from AI");
         
-        return JSON.parse(text) as AIAnalysisResult;
+        let parsedResult: any;
+        try {
+            parsedResult = JSON.parse(text);
+        } catch (e) {
+            console.error("Failed to parse AI response:", text);
+            throw new Error("Invalid JSON response from AI");
+        }
+
+        // Validate and normalize the result
+        return {
+            isReal: typeof parsedResult.isReal === 'boolean' ? parsedResult.isReal : false,
+            confidence: typeof parsedResult.confidence === 'number' ? parsedResult.confidence : 0,
+            issues: Array.isArray(parsedResult.issues) ? parsedResult.issues : ["Analysis Error"],
+            message: typeof parsedResult.message === 'string' ? parsedResult.message : "Verification Inconclusive"
+        };
 
     } catch (error) {
         console.error("Face Analysis Error:", error);

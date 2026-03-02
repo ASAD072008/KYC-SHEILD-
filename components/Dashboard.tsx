@@ -163,46 +163,72 @@ export const Dashboard: React.FC = () => {
 
             // AI Analysis
             const startTime = Date.now();
-            const result = await analyzeFaceFrame(imageBase64);
-            const duration = Date.now() - startTime;
             
-            addLog(`Analysis complete in ${duration}ms`, "info");
-            
-            setAnalysisResult(result);
-            
-            // Save to Firestore if user is logged in and db is available
-            if (user && db) {
-                try {
-                    await addDoc(collection(db, 'scans'), {
+            try {
+                // Race between analysis and timeout
+                const analysisPromise = analyzeFaceFrame(imageBase64);
+                const timeoutPromise = new Promise<AIAnalysisResult>((_, reject) => 
+                    setTimeout(() => reject(new Error("Analysis timed out")), 20000)
+                );
+
+                const result = await Promise.race([analysisPromise, timeoutPromise]);
+                
+                const duration = Date.now() - startTime;
+                addLog(`Analysis complete in ${duration}ms`, "info");
+                
+                setAnalysisResult(result);
+                
+                // Update Metrics based on real result
+                setMetrics({
+                    confidence: result.confidence,
+                    blinkRate: Math.floor(Math.random() * 15) + 10, // Simulated for single frame
+                    textureStatus: (result.issues && result.issues.length === 0) ? 'clean' : 'artifacts'
+                });
+    
+                if (result.isReal) {
+                    addLog(`VERIFIED: ${result.message}`, "success");
+                } else {
+                    addLog(`REJECTED: ${result.message}`, "alert");
+                    if (result.issues && Array.isArray(result.issues)) {
+                        result.issues.forEach(issue => addLog(`FLAG: ${issue}`, "alert"));
+                    }
+                }
+
+                // Save to Firestore in background (don't block UI)
+                if (user && db) {
+                    addDoc(collection(db, 'scans'), {
                         userId: user.uid,
                         timestamp: Timestamp.now(),
                         isReal: result.isReal,
                         confidence: result.confidence,
                         message: result.message,
-                        issues: result.issues
+                        issues: result.issues || []
+                    }).then(() => {
+                        addLog("Scan result synced with cloud.", "success");
+                    }).catch((error: any) => {
+                        console.error("Error saving scan:", error);
+                        if (error.code === 'unavailable') {
+                            addLog("Cloud sync failed: Network unavailable. Result saved locally.", "alert");
+                        } else {
+                            addLog("Cloud sync failed.", "alert");
+                        }
                     });
-                    addLog("Scan result synced with cloud.", "success");
-                } catch (error) {
-                    console.error("Error saving scan:", error);
-                    addLog("Cloud sync failed.", "alert");
                 }
+    
+                setStage('RESULT');
+
+            } catch (error: any) {
+                console.error("Verification process failed:", error);
+                addLog(`Verification failed: ${error.message}`, "alert");
+                
+                setAnalysisResult({
+                    isReal: false,
+                    confidence: 0,
+                    issues: ["System Timeout", "Network Error"],
+                    message: "Verification Failed"
+                });
+                setStage('RESULT');
             }
-
-            // Update Metrics based on real result
-            setMetrics({
-                confidence: result.confidence,
-                blinkRate: Math.floor(Math.random() * 15) + 10, // Simulated for single frame
-                textureStatus: result.issues.length === 0 ? 'clean' : 'artifacts'
-            });
-
-            if (result.isReal) {
-                addLog(`VERIFIED: ${result.message}`, "success");
-            } else {
-                addLog(`REJECTED: ${result.message}`, "alert");
-                result.issues.forEach(issue => addLog(`FLAG: ${issue}`, "alert"));
-            }
-
-            setStage('RESULT');
         }
     };
 
@@ -245,6 +271,7 @@ export const Dashboard: React.FC = () => {
                                     <p className="text-gray-500 mb-8 max-w-sm text-center">
                                         Initialize secure biometric verification session using Google Gemini Vision.
                                     </p>
+                                    
                                     <button 
                                         onClick={startCamera} 
                                         className="px-8 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition shadow-lg shadow-blue-500/30 shrink-0"
