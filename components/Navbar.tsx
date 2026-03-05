@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 
 export const Navbar: React.FC = () => {
@@ -8,15 +9,15 @@ export const Navbar: React.FC = () => {
     <nav className="fixed top-0 left-0 w-full z-50 glass-panel border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-6">
             <div className="flex items-center justify-between h-20">
-                <div className="flex items-center gap-3">
+                <Link to="/" className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-cyber/10 rounded-lg flex items-center justify-center border border-cyber/30">
                         <i className="fa-solid fa-shield-cat text-cyber text-xl"></i>
                     </div>
                     <span className="font-bold text-xl tracking-wider text-gray-900">KYC <span className="text-cyber">SHIELD</span></span>
-                </div>
+                </Link>
                 <div className="hidden md:flex items-center gap-8">
-                    <a href="#features" className="text-gray-600 hover:text-black transition text-sm font-medium">Features</a>
-                    <a href="#dashboard" className="text-gray-600 hover:text-black transition text-sm font-medium">Live Dashboard</a>
+                    <Link to="/" className="text-gray-600 hover:text-black transition text-sm font-medium">Dashboard</Link>
+                    <Link to="/admin" className="text-gray-600 hover:text-black transition text-sm font-medium">Admin Panel</Link>
                     
                     {user ? (
                         <div className="flex items-center gap-4">

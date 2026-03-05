@@ -1,7 +1,9 @@
 import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { Dashboard } from './components/Dashboard';
+import { AdminPanel } from './components/AdminPanel';
 import { ChatWidget } from './components/ChatWidget';
 import { Footer } from './components/Footer';
 import { AuthProvider, useAuth } from './AuthContext';
@@ -25,11 +27,18 @@ const ConfigErrorBanner: React.FC = () => {
 
 const AppContent: React.FC = () => {
     return (
-        <div className="min-h-screen bg-void text-white relative">
+        <div className="min-h-screen bg-void text-white relative flex flex-col">
             <Navbar />
-            <main>
-                <Hero />
-                <Dashboard />
+            <main className="flex-grow">
+                <Routes>
+                    <Route path="/" element={
+                        <>
+                            <Hero />
+                            <Dashboard />
+                        </>
+                    } />
+                    <Route path="/admin" element={<AdminPanel />} />
+                </Routes>
             </main>
             <ChatWidget />
             <ConfigErrorBanner />
@@ -41,7 +50,9 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <AppContent />
+      <Router>
+        <AppContent />
+      </Router>
     </AuthProvider>
   );
 };

@@ -4,6 +4,7 @@ import { analyzeFaceFrame, AIAnalysisResult } from '../services/geminiService';
 import { db, isFirebaseConfigured } from '../services/firebase';
 import { collection, addDoc, query, where, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
 import { useAuth } from '../AuthContext';
+import { jsPDF } from "jspdf";
 
 type KYCStage = 'START' | 'CAMERA' | 'VERIFYING' | 'RESULT' | 'HISTORY';
 
@@ -26,6 +27,10 @@ export const Dashboard: React.FC = () => {
     const [history, setHistory] = useState<ScanHistory[]>([]);
     const { user } = useAuth();
     
+    // Fingerprinting State
+    const [location, setLocation] = useState<{lat: number, lng: number} | null>(null);
+    const [deviceInfo, setDeviceInfo] = useState<any>(null);
+
     const [fps, setFps] = useState(30);
     const [livenessInstruction, setLivenessInstruction] = useState<string | null>(null);
     
@@ -41,6 +46,50 @@ export const Dashboard: React.FC = () => {
         { id: 2, timestamp: new Date().toLocaleTimeString(), message: 'AI Model: Gemini 2.5 Flash Loaded', type: 'system' }
     ]);
     const logContainerRef = useRef<HTMLDivElement>(null);
+
+    // Capture Device Fingerprint on Mount
+    useEffect(() => {
+        const ua = navigator.userAgent;
+        let browserName = "Unknown";
+        let browserVersion = "Unknown";
+
+        if (ua.indexOf("Firefox") > -1) {
+            browserName = "Firefox";
+            browserVersion = ua.match(/Firefox\/([0-9.]+)/)?.[1] || "Unknown";
+        } else if (ua.indexOf("Opera") > -1 || ua.indexOf("OPR") > -1) {
+            browserName = "Opera";
+            browserVersion = ua.match(/(?:Opera|OPR)\/([0-9.]+)/)?.[1] || "Unknown";
+        } else if (ua.indexOf("Trident") > -1) {
+            browserName = "Internet Explorer";
+        } else if (ua.indexOf("Edge") > -1) {
+            browserName = "Edge";
+            browserVersion = ua.match(/Edge\/([0-9.]+)/)?.[1] || "Unknown";
+        } else if (ua.indexOf("Chrome") > -1) {
+            browserName = "Chrome";
+            browserVersion = ua.match(/Chrome\/([0-9.]+)/)?.[1] || "Unknown";
+        } else if (ua.indexOf("Safari") > -1) {
+            browserName = "Safari";
+            browserVersion = ua.match(/Version\/([0-9.]+)/)?.[1] || "Unknown";
+        }
+
+        const info = {
+            userAgent: ua,
+            platform: navigator.platform,
+            screenResolution: `${window.screen.width}x${window.screen.height}`,
+            language: navigator.language,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            hardwareConcurrency: navigator.hardwareConcurrency || 'unknown',
+            deviceMemory: (navigator as any).deviceMemory || 'unknown',
+            browserName,
+            browserVersion,
+            vendor: navigator.vendor,
+            cookiesEnabled: navigator.cookieEnabled,
+            doNotTrack: navigator.doNotTrack,
+            online: navigator.onLine,
+        };
+        setDeviceInfo(info);
+        addLog(`Device Fingerprint: ${info.platform} / ${info.browserName} ${info.browserVersion}`, "system");
+    }, []);
 
     // Scroll logs to bottom on new entry
     useEffect(() => {
@@ -95,6 +144,36 @@ export const Dashboard: React.FC = () => {
     const startCamera = async () => {
         setStage('CAMERA');
         addLog("Initializing Camera Stream...", "system");
+        
+        // Request Geolocation with high accuracy and timeout
+        if (navigator.geolocation) {
+            addLog("Requesting Geolocation Access...", "system");
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    setLocation({
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude
+                    });
+                    addLog(`Location Acquired: ${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)}`, "success");
+                },
+                (error) => {
+                    console.warn("Geolocation error:", error);
+                    let errorMsg = "Location access denied.";
+                    if (error.code === 1) errorMsg = "Location permission denied.";
+                    else if (error.code === 2) errorMsg = "Location unavailable.";
+                    else if (error.code === 3) errorMsg = "Location request timed out.";
+                    addLog(errorMsg, "alert");
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+            );
+        } else {
+            addLog("Geolocation not supported by this browser.", "alert");
+        }
+
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
             if (videoRef.current) {
@@ -188,7 +267,12 @@ export const Dashboard: React.FC = () => {
                 if (result.isReal) {
                     addLog(`VERIFIED: ${result.message}`, "success");
                 } else {
-                    addLog(`REJECTED: ${result.message}`, "alert");
+                    if (result.message === "Missing API Key") {
+                        addLog("CRITICAL: API Key missing. Set GEMINI_API_KEY in Vercel.", "alert");
+                    } else {
+                        addLog(`REJECTED: ${result.message}`, "alert");
+                    }
+                    
                     if (result.issues && Array.isArray(result.issues)) {
                         result.issues.forEach(issue => addLog(`FLAG: ${issue}`, "alert"));
                     }
@@ -202,7 +286,9 @@ export const Dashboard: React.FC = () => {
                         isReal: result.isReal,
                         confidence: result.confidence,
                         message: result.message,
-                        issues: result.issues || []
+                        issues: result.issues || [],
+                        location: location || null,
+                        deviceInfo: deviceInfo || null
                     }).then(() => {
                         addLog("Scan result synced with cloud.", "success");
                     }).catch((error: any) => {
@@ -230,6 +316,194 @@ export const Dashboard: React.FC = () => {
                 setStage('RESULT');
             }
         }
+    };
+
+    const generateCertificate = () => {
+        if (!analysisResult || !user) return;
+
+        const doc = new jsPDF({
+            orientation: 'landscape',
+            unit: 'mm',
+            format: 'a4'
+        });
+
+        // --- Cyberpunk Theme Colors ---
+        const bgDark = [10, 10, 15]; // Almost Black
+        const neonCyan = [0, 243, 255]; // Cyan
+        const neonGreen = [0, 255, 128]; // Green
+        const neonRed = [255, 46, 80]; // Red
+        const textGray = [150, 160, 180]; // Cool Gray
+
+        // 1. Background
+        doc.setFillColor(bgDark[0], bgDark[1], bgDark[2]);
+        doc.rect(0, 0, 297, 210, 'F');
+        
+        // 2. Tech Border (HUD Style)
+        doc.setDrawColor(neonCyan[0], neonCyan[1], neonCyan[2]);
+        doc.setLineWidth(0.5);
+        
+        const margin = 10;
+        const width = 277;
+        const height = 190;
+        
+        // Outer thin line
+        doc.rect(margin, margin, width, height);
+        
+        // Corner Brackets (Thick)
+        doc.setLineWidth(2);
+        const cornerSize = 10;
+        // Top-Left
+        doc.line(margin, margin, margin + cornerSize, margin);
+        doc.line(margin, margin, margin, margin + cornerSize);
+        // Top-Right
+        doc.line(margin + width, margin, margin + width - cornerSize, margin);
+        doc.line(margin + width, margin, margin + width, margin + cornerSize);
+        // Bottom-Left
+        doc.line(margin, margin + height, margin + cornerSize, margin + height);
+        doc.line(margin, margin + height, margin, margin + height - cornerSize);
+        // Bottom-Right
+        doc.line(margin + width, margin + height, margin + width - cornerSize, margin + height);
+        doc.line(margin + width, margin + height, margin + width, margin + height - cornerSize);
+
+        // 3. Header Section
+        doc.setFont("courier", "bold");
+        doc.setFontSize(32);
+        doc.setTextColor(neonCyan[0], neonCyan[1], neonCyan[2]);
+        doc.text("IDENTITY_VERIFIED", 148.5, 35, { align: "center" });
+        
+        doc.setFontSize(10);
+        doc.setTextColor(neonCyan[0], neonCyan[1], neonCyan[2]);
+        doc.text("SECURE PROTOCOL // KYC SHIELD v2.5", 148.5, 45, { align: "center" });
+        
+        // Decorative Scan Line under header
+        doc.setDrawColor(neonCyan[0], neonCyan[1], neonCyan[2]);
+        doc.setLineWidth(0.5);
+        doc.line(50, 50, 247, 50);
+        doc.circle(50, 50, 1, 'F');
+        doc.circle(247, 50, 1, 'F');
+
+        // 4. Content Grid
+        const startY = 75;
+        
+        // --- Left Column: Applicant Data (Terminal Style) ---
+        doc.setFontSize(16);
+        doc.setTextColor(255, 255, 255);
+        doc.text("> SUBJECT_DETAILS", 30, startY);
+        
+        doc.setFontSize(12);
+        doc.setFont("courier", "normal");
+        
+        const details = [
+            { label: "NAME", value: (user.displayName || 'UNKNOWN').toUpperCase() },
+            { label: "UID", value: user.uid },
+            { label: "DATE", value: new Date().toLocaleDateString() },
+            { label: "TIME", value: new Date().toLocaleTimeString() },
+            { label: "REF", value: `KYC-${Date.now().toString().slice(-8)}` },
+            { label: "LOC", value: location ? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}` : "N/A" }
+        ];
+
+        let currentY = startY + 15;
+        details.forEach(detail => {
+            // Label
+            doc.setTextColor(textGray[0], textGray[1], textGray[2]);
+            doc.text(`[${detail.label}]`, 30, currentY);
+            
+            // Dots
+            doc.setTextColor(50, 50, 50);
+            doc.text("....................", 65, currentY);
+
+            // Value (Truncate if too long)
+            doc.setTextColor(neonCyan[0], neonCyan[1], neonCyan[2]);
+            const safeValue = detail.value.length > 30 ? detail.value.substring(0, 27) + "..." : detail.value;
+            doc.text(safeValue, 110, currentY);
+            currentY += 10;
+        });
+
+        // --- Right Column: Status & Biometrics ---
+        const rightColX = 190; // Moved from 170 to 190 to prevent overlap
+        
+        doc.setFontSize(16);
+        doc.setTextColor(255, 255, 255);
+        doc.setFont("courier", "bold");
+        doc.text("> STATUS_ANALYSIS", rightColX, startY);
+
+        // Status Box
+        const badgeY = startY + 10;
+        const badgeWidth = 80;
+        const badgeHeight = 18;
+        
+        if (analysisResult.isReal) {
+            // Glow effect simulation (multiple rects)
+            doc.setDrawColor(neonGreen[0], neonGreen[1], neonGreen[2]);
+            doc.setLineWidth(0.5);
+            doc.rect(rightColX, badgeY, badgeWidth, badgeHeight);
+            
+            doc.setFillColor(neonGreen[0], neonGreen[1], neonGreen[2]);
+            doc.rect(rightColX, badgeY, 5, badgeHeight, 'F'); // Left accent bar
+            
+            doc.setTextColor(neonGreen[0], neonGreen[1], neonGreen[2]);
+            doc.setFontSize(14);
+            doc.text("ACCESS GRANTED", rightColX + 15, badgeY + 11);
+        } else {
+            doc.setDrawColor(neonRed[0], neonRed[1], neonRed[2]);
+            doc.setLineWidth(0.5);
+            doc.rect(rightColX, badgeY, badgeWidth, badgeHeight);
+            
+            doc.setFillColor(neonRed[0], neonRed[1], neonRed[2]);
+            doc.rect(rightColX, badgeY, 5, badgeHeight, 'F');
+            
+            doc.setTextColor(neonRed[0], neonRed[1], neonRed[2]);
+            doc.setFontSize(14);
+            doc.text("ACCESS DENIED", rightColX + 15, badgeY + 11);
+        }
+
+        // Metrics
+        doc.setFont("courier", "normal");
+        doc.setFontSize(10);
+        doc.setTextColor(textGray[0], textGray[1], textGray[2]);
+        
+        doc.text(`CONFIDENCE_LEVEL : ${analysisResult.confidence}%`, rightColX, badgeY + 30);
+        doc.text(`LIVENESS_CHECK   : PASSED`, rightColX, badgeY + 38);
+        doc.text(`TEXTURE_ANALYSIS : COMPLETED`, rightColX, badgeY + 46);
+
+        // --- Captured Image (Holographic Frame) ---
+        if (capturedImage) {
+            const imgX = rightColX;
+            const imgY = badgeY + 55;
+            const imgSize = 50;
+
+            // Image Border
+            doc.setDrawColor(neonCyan[0], neonCyan[1], neonCyan[2]);
+            doc.setLineWidth(0.2);
+            doc.rect(imgX, imgY, imgSize, imgSize);
+            
+            // Corner accents for image
+            doc.setLineWidth(1);
+            const s = 5;
+            doc.line(imgX, imgY, imgX + s, imgY);
+            doc.line(imgX, imgY, imgX, imgY + s);
+            doc.line(imgX + imgSize, imgY + imgSize, imgX + imgSize - s, imgY + imgSize);
+            doc.line(imgX + imgSize, imgY + imgSize, imgX + imgSize, imgY + imgSize - s);
+
+            doc.addImage(capturedImage, 'JPEG', imgX + 1, imgY + 1, imgSize - 2, imgSize - 2);
+            
+            doc.setFontSize(8);
+            doc.setTextColor(neonCyan[0], neonCyan[1], neonCyan[2]);
+            doc.text("BIOMETRIC_CAPTURE_FRAME", imgX, imgY + imgSize + 5);
+        }
+
+        // --- Footer ---
+        const footerY = 185;
+        doc.setDrawColor(50, 50, 50);
+        doc.line(30, footerY, 267, footerY);
+        
+        doc.setFontSize(8);
+        doc.setTextColor(100, 100, 100);
+        doc.text("DIGITAL CERTIFICATE // GENERATED BY AI NEURAL ENGINE", 30, footerY + 8);
+        doc.text(`HASH: ${user.uid.substring(0, 16)}...`, 267, footerY + 8, { align: "right" });
+
+        doc.save(`KYC-Certificate-${user.uid.substring(0,6)}.pdf`);
+        addLog("Cyberpunk Certificate downloaded.", "success");
     };
 
     const resetProcess = () => {
@@ -385,12 +659,22 @@ export const Dashboard: React.FC = () => {
                                         )}
                                     </div>
     
-                                    <button 
-                                        onClick={resetProcess}
-                                        className="px-8 py-3 glass-panel text-white hover:bg-white/10 rounded-lg transition border border-white/20 shrink-0"
-                                    >
-                                        {analysisResult.isReal ? 'Continue' : 'Retry Verification'}
-                                    </button>
+                                    <div className="flex gap-4">
+                                        {analysisResult.isReal && (
+                                            <button 
+                                                onClick={generateCertificate}
+                                                className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition shadow-lg shadow-blue-500/30 shrink-0 flex items-center gap-2"
+                                            >
+                                                <i className="fa-solid fa-file-pdf"></i> Download Certificate
+                                            </button>
+                                        )}
+                                        <button 
+                                            onClick={resetProcess}
+                                            className="px-8 py-3 glass-panel text-white hover:bg-white/10 rounded-lg transition border border-white/20 shrink-0"
+                                        >
+                                            {analysisResult.isReal ? 'Continue' : 'Retry Verification'}
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         )}

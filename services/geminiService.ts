@@ -65,7 +65,19 @@ export interface AIAnalysisResult {
 export const analyzeFaceFrame = async (base64Image: string): Promise<AIAnalysisResult> => {
     try {
         // Use the standard GEMINI_API_KEY for free tier models
-        const apiKey = process.env.GEMINI_API_KEY || '';
+        // Check for both standard and VITE_ prefixed keys
+        const apiKey = process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY || '';
+        
+        if (!apiKey) {
+            console.error("API Key is missing");
+            return {
+                isReal: false,
+                confidence: 0,
+                issues: ["Configuration Error"],
+                message: "Missing API Key"
+            };
+        }
+
         const ai = new GoogleGenAI({ apiKey });
 
         // Remove the data URL prefix to get just the base64 string

@@ -3,6 +3,7 @@
   "description": "A cyberpunk-themed dashboard for detecting deepfakes in KYC processes using simulated biometric analysis and a real-time Gemini AI assistant.",
   "requestFramePermissions": [
     "camera",
-    "microphone"
+    "microphone",
+    "geolocation"
   ]
 }
