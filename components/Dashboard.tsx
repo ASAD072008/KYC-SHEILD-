@@ -327,183 +327,199 @@ export const Dashboard: React.FC = () => {
             format: 'a4'
         });
 
-        // --- Cyberpunk Theme Colors ---
-        const bgDark = [10, 10, 15]; // Almost Black
-        const neonCyan = [0, 243, 255]; // Cyan
-        const neonGreen = [0, 255, 128]; // Green
-        const neonRed = [255, 46, 80]; // Red
-        const textGray = [150, 160, 180]; // Cool Gray
+        // --- Fresh & Stylish Theme Colors ---
+        const bgLight = [255, 255, 255]; // Pure White
+        const primaryBlue = [37, 99, 235]; // Royal Blue
+        const accentCyan = [6, 182, 212]; // Cyan
+        const successGreen = [16, 185, 129]; // Emerald
+        const errorRed = [239, 68, 68]; // Red
+        const textDark = [17, 24, 39]; // Gray 900
+        const textLight = [107, 114, 128]; // Gray 500
+        const borderGray = [229, 231, 235]; // Gray 200
 
         // 1. Background
-        doc.setFillColor(bgDark[0], bgDark[1], bgDark[2]);
+        doc.setFillColor(bgLight[0], bgLight[1], bgLight[2]);
         doc.rect(0, 0, 297, 210, 'F');
         
-        // 2. Tech Border (HUD Style)
-        doc.setDrawColor(neonCyan[0], neonCyan[1], neonCyan[2]);
-        doc.setLineWidth(0.5);
-        
-        const margin = 10;
-        const width = 277;
-        const height = 190;
-        
-        // Outer thin line
+        // 2. Stylish Border
+        const margin = 12;
+        const width = 273;
+        const height = 186;
+
+        // Subtle background accent shape
+        doc.setFillColor(243, 244, 246); // Gray 100
+        doc.rect(0, 0, 297, 40, 'F'); // Top header bar background
+
+        // Main Border
+        doc.setDrawColor(primaryBlue[0], primaryBlue[1], primaryBlue[2]);
+        doc.setLineWidth(1);
         doc.rect(margin, margin, width, height);
         
-        // Corner Brackets (Thick)
-        doc.setLineWidth(2);
-        const cornerSize = 10;
-        // Top-Left
-        doc.line(margin, margin, margin + cornerSize, margin);
-        doc.line(margin, margin, margin, margin + cornerSize);
-        // Top-Right
-        doc.line(margin + width, margin, margin + width - cornerSize, margin);
-        doc.line(margin + width, margin, margin + width, margin + cornerSize);
-        // Bottom-Left
-        doc.line(margin, margin + height, margin + cornerSize, margin + height);
-        doc.line(margin, margin + height, margin, margin + height - cornerSize);
-        // Bottom-Right
-        doc.line(margin + width, margin + height, margin + width - cornerSize, margin + height);
-        doc.line(margin + width, margin + height, margin + width, margin + height - cornerSize);
+        // Inner decorative border (double line effect)
+        doc.setDrawColor(accentCyan[0], accentCyan[1], accentCyan[2]);
+        doc.setLineWidth(0.3);
+        doc.rect(margin + 2, margin + 2, width - 4, height - 4);
 
         // 3. Header Section
-        doc.setFont("courier", "bold");
-        doc.setFontSize(32);
-        doc.setTextColor(neonCyan[0], neonCyan[1], neonCyan[2]);
-        doc.text("IDENTITY_VERIFIED", 148.5, 35, { align: "center" });
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(28);
+        doc.setTextColor(primaryBlue[0], primaryBlue[1], primaryBlue[2]);
+        doc.text("IDENTITY VERIFICATION", 148.5, 28, { align: "center" });
         
+        doc.setFont("helvetica", "normal");
         doc.setFontSize(10);
-        doc.setTextColor(neonCyan[0], neonCyan[1], neonCyan[2]);
-        doc.text("SECURE PROTOCOL // KYC SHIELD v2.5", 148.5, 45, { align: "center" });
+        doc.setTextColor(textLight[0], textLight[1], textLight[2]);
+        doc.text("OFFICIAL KYC SHIELD CERTIFICATE", 148.5, 36, { align: "center" });
         
-        // Decorative Scan Line under header
-        doc.setDrawColor(neonCyan[0], neonCyan[1], neonCyan[2]);
-        doc.setLineWidth(0.5);
-        doc.line(50, 50, 247, 50);
-        doc.circle(50, 50, 1, 'F');
-        doc.circle(247, 50, 1, 'F');
-
         // 4. Content Grid
-        const startY = 75;
+        const startY = 70;
         
-        // --- Left Column: Applicant Data (Terminal Style) ---
-        doc.setFontSize(16);
-        doc.setTextColor(255, 255, 255);
-        doc.text("> SUBJECT_DETAILS", 30, startY);
+        // --- Left Column: Applicant Data ---
+        doc.setFontSize(14);
+        doc.setTextColor(primaryBlue[0], primaryBlue[1], primaryBlue[2]);
+        doc.setFont("helvetica", "bold");
+        doc.text("APPLICANT DETAILS", 30, startY);
         
-        doc.setFontSize(12);
-        doc.setFont("courier", "normal");
+        // Underline for section header
+        doc.setDrawColor(primaryBlue[0], primaryBlue[1], primaryBlue[2]);
+        doc.setLineWidth(0.5);
+        doc.line(30, startY + 2, 90, startY + 2);
+        
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "normal");
         
         const details = [
-            { label: "NAME", value: (user.displayName || 'UNKNOWN').toUpperCase() },
-            { label: "UID", value: user.uid },
-            { label: "DATE", value: new Date().toLocaleDateString() },
-            { label: "TIME", value: new Date().toLocaleTimeString() },
-            { label: "REF", value: `KYC-${Date.now().toString().slice(-8)}` },
-            { label: "LOC", value: location ? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}` : "N/A" }
+            { label: "Full Name", value: (user.displayName || 'Unknown') },
+            { label: "User ID", value: user.uid },
+            { label: "Date Issued", value: new Date().toLocaleDateString() },
+            { label: "Time Issued", value: new Date().toLocaleTimeString() },
+            { label: "Reference ID", value: `KYC-${Date.now().toString().slice(-8)}` },
+            { label: "Location", value: location ? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}` : "N/A" }
         ];
 
         let currentY = startY + 15;
         details.forEach(detail => {
             // Label
-            doc.setTextColor(textGray[0], textGray[1], textGray[2]);
-            doc.text(`[${detail.label}]`, 30, currentY);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(textLight[0], textLight[1], textLight[2]);
+            doc.text(detail.label, 30, currentY);
             
-            // Dots
-            doc.setTextColor(50, 50, 50);
-            doc.text("....................", 65, currentY);
-
             // Value (Truncate if too long)
-            doc.setTextColor(neonCyan[0], neonCyan[1], neonCyan[2]);
-            const safeValue = detail.value.length > 30 ? detail.value.substring(0, 27) + "..." : detail.value;
-            doc.text(safeValue, 110, currentY);
-            currentY += 10;
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+            const safeValue = detail.value.length > 35 ? detail.value.substring(0, 32) + "..." : detail.value;
+            doc.text(safeValue, 80, currentY); // Aligned value
+            
+            // Divider line
+            doc.setDrawColor(borderGray[0], borderGray[1], borderGray[2]);
+            doc.setLineWidth(0.1);
+            doc.line(30, currentY + 3, 140, currentY + 3);
+
+            currentY += 12; // Spacing
         });
 
         // --- Right Column: Status & Biometrics ---
-        const rightColX = 190; // Moved from 170 to 190 to prevent overlap
+        const rightColX = 180; // Adjusted for balance
         
-        doc.setFontSize(16);
-        doc.setTextColor(255, 255, 255);
-        doc.setFont("courier", "bold");
-        doc.text("> STATUS_ANALYSIS", rightColX, startY);
+        doc.setFontSize(14);
+        doc.setTextColor(primaryBlue[0], primaryBlue[1], primaryBlue[2]);
+        doc.setFont("helvetica", "bold");
+        doc.text("VERIFICATION STATUS", rightColX, startY);
+
+        // Underline for section header
+        doc.setDrawColor(primaryBlue[0], primaryBlue[1], primaryBlue[2]);
+        doc.setLineWidth(0.5);
+        doc.line(rightColX, startY + 2, rightColX + 60, startY + 2);
 
         // Status Box
-        const badgeY = startY + 10;
-        const badgeWidth = 80;
-        const badgeHeight = 18;
+        const badgeY = startY + 12;
+        const badgeWidth = 85;
+        const badgeHeight = 20;
         
         if (analysisResult.isReal) {
-            // Glow effect simulation (multiple rects)
-            doc.setDrawColor(neonGreen[0], neonGreen[1], neonGreen[2]);
+            // Success Badge
+            doc.setFillColor(209, 250, 229); // Light Emerald
+            doc.roundedRect(rightColX, badgeY, badgeWidth, badgeHeight, 2, 2, 'F');
+            
+            doc.setDrawColor(successGreen[0], successGreen[1], successGreen[2]);
             doc.setLineWidth(0.5);
-            doc.rect(rightColX, badgeY, badgeWidth, badgeHeight);
+            doc.roundedRect(rightColX, badgeY, badgeWidth, badgeHeight, 2, 2, 'S');
             
-            doc.setFillColor(neonGreen[0], neonGreen[1], neonGreen[2]);
-            doc.rect(rightColX, badgeY, 5, badgeHeight, 'F'); // Left accent bar
-            
-            doc.setTextColor(neonGreen[0], neonGreen[1], neonGreen[2]);
+            doc.setTextColor(successGreen[0], successGreen[1], successGreen[2]);
             doc.setFontSize(14);
-            doc.text("ACCESS GRANTED", rightColX + 15, badgeY + 11);
+            doc.setFont("helvetica", "bold");
+            doc.text("ACCESS GRANTED", rightColX + 42.5, badgeY + 13, { align: "center" });
         } else {
-            doc.setDrawColor(neonRed[0], neonRed[1], neonRed[2]);
+            // Failure Badge
+            doc.setFillColor(254, 226, 226); // Light Red
+            doc.roundedRect(rightColX, badgeY, badgeWidth, badgeHeight, 2, 2, 'F');
+            
+            doc.setDrawColor(errorRed[0], errorRed[1], errorRed[2]);
             doc.setLineWidth(0.5);
-            doc.rect(rightColX, badgeY, badgeWidth, badgeHeight);
+            doc.roundedRect(rightColX, badgeY, badgeWidth, badgeHeight, 2, 2, 'S');
             
-            doc.setFillColor(neonRed[0], neonRed[1], neonRed[2]);
-            doc.rect(rightColX, badgeY, 5, badgeHeight, 'F');
-            
-            doc.setTextColor(neonRed[0], neonRed[1], neonRed[2]);
+            doc.setTextColor(errorRed[0], errorRed[1], errorRed[2]);
             doc.setFontSize(14);
-            doc.text("ACCESS DENIED", rightColX + 15, badgeY + 11);
+            doc.setFont("helvetica", "bold");
+            doc.text("ACCESS DENIED", rightColX + 42.5, badgeY + 13, { align: "center" });
         }
 
         // Metrics
-        doc.setFont("courier", "normal");
-        doc.setFontSize(10);
-        doc.setTextColor(textGray[0], textGray[1], textGray[2]);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(11);
+        doc.setTextColor(textDark[0], textDark[1], textDark[2]);
         
-        doc.text(`CONFIDENCE_LEVEL : ${analysisResult.confidence}%`, rightColX, badgeY + 30);
-        doc.text(`LIVENESS_CHECK   : PASSED`, rightColX, badgeY + 38);
-        doc.text(`TEXTURE_ANALYSIS : COMPLETED`, rightColX, badgeY + 46);
+        const metricsY = badgeY + 30;
+        doc.text(`Confidence Score:`, rightColX, metricsY);
+        doc.setFont("helvetica", "bold");
+        doc.text(`${analysisResult.confidence}%`, rightColX + 40, metricsY);
+        
+        doc.setFont("helvetica", "normal");
+        doc.text(`Liveness Check:`, rightColX, metricsY + 8);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(successGreen[0], successGreen[1], successGreen[2]);
+        doc.text(`PASSED`, rightColX + 40, metricsY + 8);
+        
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+        doc.text(`Texture Analysis:`, rightColX, metricsY + 16);
+        doc.setFont("helvetica", "bold");
+        doc.text(`COMPLETED`, rightColX + 40, metricsY + 16);
 
-        // --- Captured Image (Holographic Frame) ---
+        // --- Captured Image (Clean Frame) ---
         if (capturedImage) {
             const imgX = rightColX;
-            const imgY = badgeY + 55;
-            const imgSize = 50;
+            const imgY = metricsY + 25;
+            const imgSize = 55;
 
-            // Image Border
-            doc.setDrawColor(neonCyan[0], neonCyan[1], neonCyan[2]);
-            doc.setLineWidth(0.2);
-            doc.rect(imgX, imgY, imgSize, imgSize);
+            // Image Border/Shadow effect
+            doc.setFillColor(229, 231, 235); // Gray shadow
+            doc.rect(imgX + 2, imgY + 2, imgSize, imgSize, 'F');
             
-            // Corner accents for image
-            doc.setLineWidth(1);
-            const s = 5;
-            doc.line(imgX, imgY, imgX + s, imgY);
-            doc.line(imgX, imgY, imgX, imgY + s);
-            doc.line(imgX + imgSize, imgY + imgSize, imgX + imgSize - s, imgY + imgSize);
-            doc.line(imgX + imgSize, imgY + imgSize, imgX + imgSize, imgY + imgSize - s);
+            doc.setDrawColor(primaryBlue[0], primaryBlue[1], primaryBlue[2]);
+            doc.setLineWidth(0.5);
+            doc.rect(imgX, imgY, imgSize, imgSize);
 
             doc.addImage(capturedImage, 'JPEG', imgX + 1, imgY + 1, imgSize - 2, imgSize - 2);
             
             doc.setFontSize(8);
-            doc.setTextColor(neonCyan[0], neonCyan[1], neonCyan[2]);
-            doc.text("BIOMETRIC_CAPTURE_FRAME", imgX, imgY + imgSize + 5);
+            doc.setFont("helvetica", "italic");
+            doc.setTextColor(textLight[0], textLight[1], textLight[2]);
+            doc.text("Biometric Capture Reference", imgX + (imgSize/2), imgY + imgSize + 5, { align: "center" });
         }
 
-        // --- Footer ---
-        const footerY = 185;
-        doc.setDrawColor(50, 50, 50);
-        doc.line(30, footerY, 267, footerY);
+        // 5. Footer
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        doc.setTextColor(textLight[0], textLight[1], textLight[2]);
         
-        doc.setFontSize(8);
-        doc.setTextColor(100, 100, 100);
-        doc.text("DIGITAL CERTIFICATE // GENERATED BY AI NEURAL ENGINE", 30, footerY + 8);
-        doc.text(`HASH: ${user.uid.substring(0, 16)}...`, 267, footerY + 8, { align: "right" });
+        const footerY = 195;
+        doc.line(margin + 10, footerY, width - 10, footerY); // Footer line
+        doc.text(`Certificate ID: ${analysisResult.id || 'GEN-' + Date.now()}`, 148.5, footerY + 5, { align: "center" });
+        doc.text("Powered by KYC Shield AI • Secure Verification System", 148.5, footerY + 10, { align: "center" });
 
-        doc.save(`KYC-Certificate-${user.uid.substring(0,6)}.pdf`);
-        addLog("Cyberpunk Certificate downloaded.", "success");
+        doc.save(`KYC-Certificate-${user.uid.slice(0, 6)}.pdf`);
+        addLog("Certificate downloaded successfully.", "success");
     };
 
     const resetProcess = () => {
