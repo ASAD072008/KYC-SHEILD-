@@ -141,9 +141,19 @@ export const Dashboard: React.FC = () => {
         }]);
     }, []);
 
+    // Cleanup camera on unmount
+    useEffect(() => {
+        return () => {
+            stopCamera();
+        };
+    }, []);
+
     const startCamera = async () => {
         setStage('CAMERA');
         addLog("Initializing Camera Stream...", "system");
+        
+        // Stop any existing stream first to prevent "Device in use" errors
+        stopCamera();
         
         // Request Geolocation with high accuracy and timeout
         if (navigator.geolocation) {
@@ -180,10 +190,19 @@ export const Dashboard: React.FC = () => {
                 videoRef.current.srcObject = stream;
                 addLog("Video Stream Connected.", "success");
             }
-        } catch (err) {
-            console.error(err);
-            addLog("Camera access denied.", 'alert');
-            alert("Camera permission is required for KYC.");
+        } catch (err: any) {
+            console.error("Camera error:", err);
+            let errorMessage = "Camera access denied.";
+            if (err.name === 'NotReadableError' || err.message?.includes('Device in use')) {
+                errorMessage = "Camera is already in use by another application or tab.";
+            } else if (err.name === 'NotAllowedError') {
+                errorMessage = "Camera permission was denied.";
+            } else if (err.name === 'NotFoundError') {
+                errorMessage = "No camera device found.";
+            }
+            
+            addLog(errorMessage, 'alert');
+            alert(errorMessage + " Please check your camera and try again.");
             setStage('START');
         }
     };
