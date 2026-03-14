@@ -7,7 +7,7 @@ KYC Shield Team
 TEAM_ID_HERE
 
 ## Live Demo
-[https://kyc-sheild-e7fl.vercel.app](https://kyc-sheild-e7fl.vercel.app)
+https://kyc-sheild-e7fl.vercel.app?_vercel_share=2GNlKiF8BPclm1ij6fptPjo7fOOlI7jf
 
 ---
 
@@ -105,7 +105,7 @@ The project is deployed using Vercel.
 
 * **Build command:** `npm run build`
 * **Output directory:** `dist`
-* **Live URL:** [https://kyc-sheild-e7fl.vercel.app](https://kyc-sheild-e7fl.vercel.app)
+* **Live URL:** https://kyc-sheild-e7fl.vercel.app?_vercel_share=2GNlKiF8BPclm1ij6fptPjo7fOOlI7jf
 
 ---
 

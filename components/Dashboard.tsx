@@ -1,12 +1,15 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { LogEntry, Metrics } from '../types';
-import { analyzeFaceFrame, AIAnalysisResult } from '../services/geminiService';
+import { analyzeFaceFrame, analyzeIdentity, AIAnalysisResult as ServiceAIAnalysisResult } from '../services/geminiService';
+
+// Re-export or use the one from service
+export type AIAnalysisResult = ServiceAIAnalysisResult;
 import { db, isFirebaseConfigured } from '../services/firebase';
 import { collection, addDoc, query, where, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
 import { useAuth } from '../AuthContext';
 import { jsPDF } from "jspdf";
 
-type KYCStage = 'START' | 'CAMERA' | 'VERIFYING' | 'RESULT' | 'HISTORY';
+type KYCStage = 'START' | 'ID_UPLOAD' | 'CAMERA' | 'VERIFYING' | 'RESULT' | 'HISTORY';
 
 interface ScanHistory {
     id: string;
@@ -19,13 +22,16 @@ interface ScanHistory {
 export const Dashboard: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     
     // Process State
     const [stage, setStage] = useState<KYCStage>('START');
+    const [idImage, setIdImage] = useState<string | null>(null);
     const [capturedImage, setCapturedImage] = useState<string | null>(null);
     const [analysisResult, setAnalysisResult] = useState<AIAnalysisResult | null>(null);
     const [history, setHistory] = useState<ScanHistory[]>([]);
-    const { user } = useAuth();
+    const { user, login } = useAuth();
+    const [showLoginPrompt, setShowLoginPrompt] = useState(false);
     
     // Fingerprinting State
     const [location, setLocation] = useState<{lat: number, lng: number} | null>(null);
@@ -239,6 +245,18 @@ export const Dashboard: React.FC = () => {
         setLivenessInstruction(null);
     };
 
+    const handleIdUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setIdImage(reader.result as string);
+                addLog("ID Document uploaded successfully.", "success");
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
     const captureAndVerify = async () => {
         if (!videoRef.current || !canvasRef.current) return;
 
@@ -264,7 +282,10 @@ export const Dashboard: React.FC = () => {
             
             try {
                 // Race between analysis and timeout
-                const analysisPromise = analyzeFaceFrame(imageBase64);
+                const analysisPromise = idImage 
+                    ? analyzeIdentity(idImage, imageBase64)
+                    : analyzeFaceFrame(imageBase64);
+                
                 const timeoutPromise = new Promise<AIAnalysisResult>((_, reject) => 
                     setTimeout(() => reject(new Error("Analysis timed out")), 20000)
                 );
@@ -285,6 +306,11 @@ export const Dashboard: React.FC = () => {
     
                 if (result.isReal) {
                     addLog(`VERIFIED: ${result.message}`, "success");
+                    if (idImage && result.idMatch) {
+                        addLog("ID MATCH: Face matches government document.", "success");
+                    } else if (idImage && !result.idMatch) {
+                        addLog("ID MISMATCH: Face does not match document.", "alert");
+                    }
                 } else {
                     if (result.message === "Missing API Key") {
                         addLog("CRITICAL: API Key missing. Set GEMINI_API_KEY in Vercel.", "alert");
@@ -408,8 +434,8 @@ export const Dashboard: React.FC = () => {
         doc.setFont("helvetica", "normal");
         
         const details = [
-            { label: "Full Name", value: (user.displayName || 'Unknown') },
-            { label: "User ID", value: user.uid },
+            { label: "Full Name", value: (analysisResult.extractedName && analysisResult.extractedName !== 'Unknown' ? analysisResult.extractedName : user.displayName || 'Unknown') },
+            { label: "User ID", value: (analysisResult.extractedIdNumber && analysisResult.extractedIdNumber !== 'Unknown' ? analysisResult.extractedIdNumber : user.uid) },
             { label: "Date Issued", value: new Date().toLocaleDateString() },
             { label: "Time Issued", value: new Date().toLocaleTimeString() },
             { label: "Reference ID", value: `KYC-${Date.now().toString().slice(-8)}` },
@@ -423,16 +449,16 @@ export const Dashboard: React.FC = () => {
             doc.setTextColor(textLight[0], textLight[1], textLight[2]);
             doc.text(detail.label, 30, currentY);
             
-            // Value (Truncate if too long)
+            // Value (Truncate if too long to prevent overlap)
             doc.setFont("helvetica", "normal");
             doc.setTextColor(textDark[0], textDark[1], textDark[2]);
-            const safeValue = detail.value.length > 35 ? detail.value.substring(0, 32) + "..." : detail.value;
+            const safeValue = detail.value.length > 30 ? detail.value.substring(0, 27) + "..." : detail.value;
             doc.text(safeValue, 80, currentY); // Aligned value
             
             // Divider line
             doc.setDrawColor(borderGray[0], borderGray[1], borderGray[2]);
             doc.setLineWidth(0.1);
-            doc.line(30, currentY + 3, 140, currentY + 3);
+            doc.line(30, currentY + 3, 160, currentY + 3); // Extended slightly to fit longer names
 
             currentY += 12; // Spacing
         });
@@ -505,11 +531,25 @@ export const Dashboard: React.FC = () => {
         doc.setFont("helvetica", "bold");
         doc.text(`COMPLETED`, rightColX + 40, metricsY + 16);
 
+        if (idImage) {
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+            doc.text(`ID Face Match:`, rightColX, metricsY + 24);
+            doc.setFont("helvetica", "bold");
+            if (analysisResult.idMatch) {
+                doc.setTextColor(successGreen[0], successGreen[1], successGreen[2]);
+                doc.text(`PASSED`, rightColX + 40, metricsY + 24);
+            } else {
+                doc.setTextColor(errorRed[0], errorRed[1], errorRed[2]);
+                doc.text(`FAILED`, rightColX + 40, metricsY + 24);
+            }
+        }
+
         // --- Captured Image (Clean Frame) ---
         if (capturedImage) {
             const imgX = rightColX;
-            const imgY = metricsY + 25;
-            const imgSize = 55;
+            const imgY = metricsY + (idImage ? 30 : 22);
+            const imgSize = 45; // Reduced from 55 to prevent overlap
 
             // Image Border/Shadow effect
             doc.setFillColor(229, 231, 235); // Gray shadow
@@ -543,6 +583,7 @@ export const Dashboard: React.FC = () => {
 
     const resetProcess = () => {
         setCapturedImage(null);
+        setIdImage(null);
         setAnalysisResult(null);
         setStage('START');
         addLog("Session reset. Ready for next applicant.", "system");
@@ -582,11 +623,68 @@ export const Dashboard: React.FC = () => {
                                     </p>
                                     
                                     <button 
-                                        onClick={startCamera} 
+                                        onClick={() => {
+                                            if (!user) {
+                                                setShowLoginPrompt(true);
+                                                return;
+                                            }
+                                            setStage('ID_UPLOAD');
+                                            addLog("Initiating ID Document Upload phase...", "system");
+                                        }} 
                                         className="px-8 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition shadow-lg shadow-blue-500/30 shrink-0"
                                     >
-                                        Start Camera Session
+                                        Begin Verification
                                     </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* STAGE: ID_UPLOAD */}
+                        {stage === 'ID_UPLOAD' && (
+                            <div className="absolute inset-0 z-20 overflow-y-auto bg-white">
+                                <div className="min-h-full flex flex-col items-center justify-center p-8">
+                                    <h3 className="text-2xl font-bold mb-2 text-center text-gray-900">Upload Government ID</h3>
+                                    <p className="text-gray-500 mb-6 max-w-md text-center">
+                                        Please upload a clear picture of your Aadhar Card, Passport, or Driver's License for identity verification.
+                                    </p>
+                                    
+                                    <div className="relative w-full max-w-md border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-500 transition-colors bg-gray-50 mb-6">
+                                        {idImage ? (
+                                            <div className="flex flex-col items-center">
+                                                <img src={idImage} alt="Uploaded ID" className="max-h-40 rounded shadow-md mb-4 object-contain" />
+                                                <p className="text-sm text-green-600 font-medium"><i className="fa-solid fa-check-circle mr-1"></i> Document Uploaded</p>
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col items-center">
+                                                <i className="fa-solid fa-id-card text-4xl text-gray-400 mb-3"></i>
+                                                <p className="text-gray-600 font-medium mb-2">Drag & drop or click to upload</p>
+                                                <p className="text-xs text-gray-400">JPEG, PNG up to 5MB</p>
+                                            </div>
+                                        )}
+                                        <input 
+                                            type="file" 
+                                            accept="image/*" 
+                                            onChange={handleIdUpload}
+                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                            title="Upload ID Document"
+                                        />
+                                    </div>
+
+                                    <div className="flex gap-4">
+                                        <button 
+                                            onClick={() => setStage('START')} 
+                                            className="px-6 py-2 bg-gray-100 text-gray-700 font-bold rounded-lg hover:bg-gray-200 transition"
+                                        >
+                                            Back
+                                        </button>
+                                        <button 
+                                            onClick={startCamera} 
+                                            disabled={!idImage}
+                                            className={`px-6 py-2 font-bold rounded-lg transition shadow-lg ${idImage ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-500/30' : 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'}`}
+                                        >
+                                            Proceed to Face Scan
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -813,6 +911,39 @@ export const Dashboard: React.FC = () => {
 
                 </div>
             </div>
+
+            {/* Login Prompt Modal */}
+            {showLoginPrompt && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl border border-gray-200 animate-in fade-in zoom-in duration-300">
+                        <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mb-6 mx-auto">
+                            <i className="fa-solid fa-lock text-2xl text-blue-600"></i>
+                        </div>
+                        <h3 className="text-2xl font-bold text-gray-900 text-center mb-2">Login Required</h3>
+                        <p className="text-gray-600 text-center mb-8">
+                            You have to login first then proceed to next. Please sign in to start your secure verification.
+                        </p>
+                        <div className="flex flex-col gap-3">
+                            <button 
+                                onClick={async () => {
+                                    setShowLoginPrompt(false);
+                                    await login();
+                                }}
+                                className="w-full py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
+                            >
+                                <i className="fa-brands fa-google"></i>
+                                Sign in with Google
+                            </button>
+                            <button 
+                                onClick={() => setShowLoginPrompt(false)}
+                                className="w-full py-3 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </section>
     );
 };
