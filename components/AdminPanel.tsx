@@ -29,10 +29,16 @@ interface ScanData {
 export const AdminPanel: React.FC = () => {
   const [scans, setScans] = useState<ScanData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: 'timestamp' | 'confidence', direction: 'asc' | 'desc' } | null>({ key: 'timestamp', direction: 'desc' });
 
   useEffect(() => {
     const fetchScans = async () => {
-      if (!db) return;
+      if (!db) {
+        setError("Firebase is not configured. Please check your environment variables.");
+        setLoading(false);
+        return;
+      }
       try {
         const q = query(collection(db, 'scans'), orderBy('timestamp', 'desc'));
         const querySnapshot = await getDocs(q);
@@ -41,8 +47,13 @@ export const AdminPanel: React.FC = () => {
           fetchedScans.push({ id: doc.id, ...doc.data() } as ScanData);
         });
         setScans(fetchedScans);
-      } catch (error) {
-        console.error("Error fetching scans:", error);
+      } catch (err: any) {
+        console.error("Error fetching scans:", err);
+        if (err.code === 'permission-denied') {
+          setError("Permission Denied: Your Firestore Security Rules are blocking read access to the 'scans' collection. Please update them in the Firebase Console.");
+        } else {
+          setError(`Failed to load scans: ${err.message}`);
+        }
       } finally {
         setLoading(false);
       }
@@ -50,6 +61,38 @@ export const AdminPanel: React.FC = () => {
 
     fetchScans();
   }, []);
+
+  const handleSort = (key: 'timestamp' | 'confidence') => {
+    let direction: 'asc' | 'desc' = 'desc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'desc') {
+      direction = 'asc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const sortedScans = React.useMemo(() => {
+    let sortableScans = [...scans];
+    if (sortConfig !== null) {
+      sortableScans.sort((a, b) => {
+        let aValue: any = a[sortConfig.key];
+        let bValue: any = b[sortConfig.key];
+
+        if (sortConfig.key === 'timestamp') {
+          aValue = a.timestamp?.toMillis() || 0;
+          bValue = b.timestamp?.toMillis() || 0;
+        }
+
+        if (aValue < bValue) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return sortableScans;
+  }, [scans, sortConfig]);
 
   if (loading) {
     return <div className="min-h-screen pt-24 flex justify-center text-white">Loading Admin Data...</div>;
@@ -60,22 +103,65 @@ export const AdminPanel: React.FC = () => {
       <div className="max-w-7xl mx-auto">
         <h1 className="text-3xl font-bold mb-8 text-blue-400">Admin Review Panel</h1>
         
-        <div className="bg-gray-900/50 rounded-xl border border-white/10 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+        {error ? (
+          <div className="bg-red-900/50 border border-red-500/50 text-red-200 p-6 rounded-xl mb-8">
+            <h3 className="text-xl font-bold mb-2 flex items-center gap-2">
+              <i className="fa-solid fa-triangle-exclamation"></i> Database Access Error
+            </h3>
+            <p>{error}</p>
+            {error.includes('Permission Denied') && (
+              <div className="mt-4 p-4 bg-black/30 rounded-lg text-sm font-mono text-gray-300">
+                <p className="mb-2">To fix this, go to Firebase Console &gt; Firestore Database &gt; Rules, and update them to:</p>
+                <pre className="text-green-400">
+{`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /scans/{scanId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}`}
+                </pre>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="bg-gray-900/50 rounded-xl border border-white/10 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-900 border-b border-slate-800 text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                  <th className="p-4">Time</th>
+                  <th 
+                    className="p-4 cursor-pointer hover:text-white transition-colors group"
+                    onClick={() => handleSort('timestamp')}
+                  >
+                    <div className="flex items-center gap-2">
+                      Time
+                      <span className="text-slate-600 group-hover:text-slate-400">
+                        {sortConfig?.key === 'timestamp' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}
+                      </span>
+                    </div>
+                  </th>
                   <th className="p-4">User ID</th>
                   <th className="p-4">Status</th>
-                  <th className="p-4">Confidence</th>
+                  <th 
+                    className="p-4 cursor-pointer hover:text-white transition-colors group"
+                    onClick={() => handleSort('confidence')}
+                  >
+                    <div className="flex items-center gap-2">
+                      Confidence
+                      <span className="text-slate-600 group-hover:text-slate-400">
+                        {sortConfig?.key === 'confidence' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}
+                      </span>
+                    </div>
+                  </th>
                   <th className="p-4">Device / Location</th>
                   <th className="p-4">Issues</th>
                   <th className="p-4">Message</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/50">
-                {scans.map((scan) => (
+                {sortedScans.map((scan) => (
                   <tr key={scan.id} className="hover:bg-slate-800/30 transition-colors">
                     <td className="p-4 text-sm text-slate-400 font-mono">
                       {scan.timestamp?.toDate().toLocaleString()}
@@ -155,12 +241,13 @@ export const AdminPanel: React.FC = () => {
             </table>
           </div>
           
-          {scans.length === 0 && (
-            <div className="p-8 text-center text-gray-500">
-              No verification records found.
-            </div>
-          )}
-        </div>
+            {scans.length === 0 && (
+              <div className="p-8 text-center text-gray-500">
+                No verification records found.
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

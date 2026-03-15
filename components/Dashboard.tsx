@@ -147,6 +147,9 @@ export const Dashboard: React.FC = () => {
         }]);
     }, []);
 
+    const [uploadProgress, setUploadProgress] = useState<number>(0);
+    const [uploadError, setUploadError] = useState<string | null>(null);
+
     // Cleanup camera on unmount
     useEffect(() => {
         return () => {
@@ -247,11 +250,42 @@ export const Dashboard: React.FC = () => {
 
     const handleIdUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
+        setUploadError(null);
+        setUploadProgress(0);
+
         if (file) {
+            // Basic validation
+            if (!file.type.startsWith('image/')) {
+                setUploadError("Please upload a valid image file (JPEG, PNG).");
+                return;
+            }
+            if (file.size > 5 * 1024 * 1024) {
+                setUploadError("File size exceeds 5MB limit.");
+                return;
+            }
+
+            // Simulate progress for visual feedback
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += 10;
+                setUploadProgress(progress);
+                if (progress >= 90) clearInterval(interval);
+            }, 50);
+
             const reader = new FileReader();
             reader.onloadend = () => {
-                setIdImage(reader.result as string);
-                addLog("ID Document uploaded successfully.", "success");
+                clearInterval(interval);
+                setUploadProgress(100);
+                setTimeout(() => {
+                    setIdImage(reader.result as string);
+                    setUploadProgress(0);
+                    addLog("ID Document uploaded successfully.", "success");
+                }, 300);
+            };
+            reader.onerror = () => {
+                clearInterval(interval);
+                setUploadProgress(0);
+                setUploadError("Failed to read file.");
             };
             reader.readAsDataURL(file);
         }
@@ -340,8 +374,10 @@ export const Dashboard: React.FC = () => {
                         console.error("Error saving scan:", error);
                         if (error.code === 'unavailable') {
                             addLog("Cloud sync failed: Network unavailable. Result saved locally.", "alert");
+                        } else if (error.code === 'permission-denied') {
+                            addLog("Cloud sync failed: Permission Denied. Check Firestore Security Rules.", "alert");
                         } else {
-                            addLog("Cloud sync failed.", "alert");
+                            addLog(`Cloud sync failed: ${error.message}`, "alert");
                         }
                     });
                 }
@@ -643,34 +679,51 @@ export const Dashboard: React.FC = () => {
                         {stage === 'ID_UPLOAD' && (
                             <div className="absolute inset-0 z-20 overflow-y-auto bg-white">
                                 <div className="min-h-full flex flex-col items-center justify-center p-8">
-                                    <h3 className="text-2xl font-bold mb-2 text-center text-gray-900">Upload Government ID</h3>
+                                    <h3 className="text-2xl font-bold mb-2 text-center text-gray-900">Upload Aadhar Card</h3>
                                     <p className="text-gray-500 mb-6 max-w-md text-center">
-                                        Please upload a clear picture of your Aadhar Card, Passport, or Driver's License for identity verification.
+                                        Please upload a clear picture of your Aadhar Card for identity verification. Note: Only Aadhar cards are supported.
                                     </p>
                                     
-                                    <div className="relative w-full max-w-md border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-500 transition-colors bg-gray-50 mb-6">
+                                    <div className="relative w-full max-w-md border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-500 transition-colors bg-gray-50 mb-6 overflow-hidden">
+                                        {uploadProgress > 0 && uploadProgress < 100 && (
+                                            <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center z-10">
+                                                <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-3"></div>
+                                                <p className="text-blue-600 font-medium">Processing... {uploadProgress}%</p>
+                                            </div>
+                                        )}
+                                        
                                         {idImage ? (
                                             <div className="flex flex-col items-center">
                                                 <img src={idImage} alt="Uploaded ID" className="max-h-40 rounded shadow-md mb-4 object-contain" />
-                                                <p className="text-sm text-green-600 font-medium"><i className="fa-solid fa-check-circle mr-1"></i> Document Uploaded</p>
+                                                <p className="text-sm text-green-600 font-medium"><i className="fa-solid fa-check-circle mr-1"></i> Document Uploaded Successfully</p>
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); setIdImage(null); setUploadError(null); }}
+                                                    className="mt-3 text-xs text-red-500 hover:text-red-700 underline"
+                                                >
+                                                    Remove and upload different ID
+                                                </button>
                                             </div>
                                         ) : (
                                             <div className="flex flex-col items-center">
-                                                <i className="fa-solid fa-id-card text-4xl text-gray-400 mb-3"></i>
-                                                <p className="text-gray-600 font-medium mb-2">Drag & drop or click to upload</p>
+                                                <i className={`fa-solid fa-id-card text-4xl mb-3 ${uploadError ? 'text-red-400' : 'text-gray-400'}`}></i>
+                                                <p className={`font-medium mb-2 ${uploadError ? 'text-red-600' : 'text-gray-600'}`}>
+                                                    {uploadError || "Drag & drop or click to upload"}
+                                                </p>
                                                 <p className="text-xs text-gray-400">JPEG, PNG up to 5MB</p>
                                             </div>
                                         )}
-                                        <input 
-                                            type="file" 
-                                            accept="image/*" 
-                                            onChange={handleIdUpload}
-                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                            title="Upload ID Document"
-                                        />
+                                        {!idImage && (
+                                            <input 
+                                                type="file" 
+                                                accept="image/jpeg, image/png" 
+                                                onChange={handleIdUpload}
+                                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                                title="Upload ID Document"
+                                            />
+                                        )}
                                     </div>
 
-                                    <div className="flex gap-4">
+                                    <div className="flex gap-4 mb-4">
                                         <button 
                                             onClick={() => setStage('START')} 
                                             className="px-6 py-2 bg-gray-100 text-gray-700 font-bold rounded-lg hover:bg-gray-200 transition"
@@ -684,6 +737,18 @@ export const Dashboard: React.FC = () => {
                                         >
                                             Proceed to Face Scan
                                         </button>
+                                    </div>
+                                    <div className="text-center mt-2">
+                                        <p className="text-sm text-gray-500 mb-2">Don't have your Aadhaar?</p>
+                                        <a 
+                                            href="https://uidai.gov.in/en/my-aadhaar/get-aadhaar.html" 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-2 px-4 py-2 bg-orange-50 text-orange-600 font-medium rounded-lg hover:bg-orange-100 transition border border-orange-200 text-sm"
+                                        >
+                                            <i className="fa-solid fa-download"></i>
+                                            Download Aadhaar from UIDAI
+                                        </a>
                                     </div>
                                 </div>
                             </div>
@@ -706,24 +771,77 @@ export const Dashboard: React.FC = () => {
                                 <div className="scan-line opacity-50"></div>
                                 
                                 {/* Face Frame Guide */}
-                                <div className={`absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-80 border-2 border-dashed ${livenessInstruction ? 'border-cyber' : 'border-white/30'} rounded-[3rem] flex items-center justify-center transition-colors duration-300`}>
-                                    <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-cyber rounded-tl-xl"></div>
-                                    <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-cyber rounded-tr-xl"></div>
-                                    <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-cyber rounded-bl-xl"></div>
-                                    <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-cyber rounded-br-xl"></div>
+                                <div className={`absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-80 border-2 border-dashed ${livenessInstruction ? 'border-cyber' : 'border-white/40'} rounded-[3rem] flex items-center justify-center transition-all duration-500`}>
+                                    {/* Subtle pulsing glow behind the frame */}
+                                    <div className={`absolute inset-0 rounded-[3rem] pointer-events-none transition-all duration-1000 animate-pulse ${livenessInstruction ? 'shadow-[0_0_60px_rgba(0,243,255,0.6)]' : 'shadow-[0_0_30px_rgba(255,255,255,0.3)]'}`}></div>
+                                    
+                                    {/* Animated Corner Markers */}
+                                    <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-cyber rounded-tl-[3rem] animate-[ping_3s_ease-in-out_infinite_reverse] opacity-70"></div>
+                                    <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-cyber rounded-tr-[3rem] animate-[ping_3s_ease-in-out_infinite_reverse] opacity-70" style={{ animationDelay: '0.5s' }}></div>
+                                    <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-cyber rounded-bl-[3rem] animate-[ping_3s_ease-in-out_infinite_reverse] opacity-70" style={{ animationDelay: '1s' }}></div>
+                                    <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-cyber rounded-br-[3rem] animate-[ping_3s_ease-in-out_infinite_reverse] opacity-70" style={{ animationDelay: '1.5s' }}></div>
+                                    
+                                    {/* Static Corner Markers */}
+                                    <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-cyber rounded-tl-[3rem]"></div>
+                                    <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-cyber rounded-tr-[3rem]"></div>
+                                    <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-cyber rounded-bl-[3rem]"></div>
+                                    <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-cyber rounded-br-[3rem]"></div>
+                                    
+                                    {/* Center alignment crosshair (subtle) */}
+                                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-8 h-8 opacity-20">
+                                        <div className="absolute top-1/2 left-0 w-full h-[1px] bg-cyber"></div>
+                                        <div className="absolute top-0 left-1/2 w-[1px] h-full bg-cyber"></div>
+                                    </div>
                                 </div>
 
-                                <div className="absolute bottom-24 w-full text-center">
-                                    {livenessInstruction ? (
-                                        <p className="text-cyber font-bold text-2xl bg-black/60 inline-block px-6 py-3 rounded-lg backdrop-blur-md animate-pulse border border-cyber/30">
-                                            {livenessInstruction}
-                                        </p>
-                                    ) : (
-                                        <p className="text-white font-bold text-lg bg-black/40 inline-block px-4 py-1 rounded backdrop-blur-sm">
-                                            Ensure Good Lighting & Look Straight
-                                        </p>
-                                    )}
-                                </div>
+                                {/* Liveness Instruction Overlay */}
+                                {livenessInstruction && (
+                                    <div className="absolute top-24 left-1/2 transform -translate-x-1/2 z-30 w-full max-w-md px-4">
+                                        <div className="bg-black/70 backdrop-blur-md border border-cyber/50 rounded-2xl p-4 shadow-[0_0_30px_rgba(0,243,255,0.2)] flex flex-col items-center text-center animate-in slide-in-from-top-4 duration-300">
+                                            <div className="text-cyber/80 text-xs font-bold uppercase tracking-widest mb-1 flex items-center gap-2">
+                                                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                                                Action Required
+                                            </div>
+                                            <p className="text-white font-bold text-2xl tracking-wide">
+                                                {livenessInstruction}
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Instructions Overlay when not running */}
+                                {!livenessInstruction && (
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] z-10">
+                                        <div className="bg-black/80 border border-white/20 rounded-2xl p-6 max-w-sm w-11/12 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in duration-500">
+                                            <h3 className="text-white text-xl font-bold mb-5 flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-full bg-cyber/20 flex items-center justify-center">
+                                                    <i className="fa-solid fa-expand text-cyber text-xl"></i>
+                                                </div>
+                                                Face Scan Guide
+                                            </h3>
+                                            <ul className="space-y-4 text-left">
+                                                <li className="flex items-start gap-3">
+                                                    <div className="w-6 h-6 rounded-full bg-cyber/20 text-cyber flex items-center justify-center shrink-0 font-bold text-sm border border-cyber/50 mt-0.5">1</div>
+                                                    <p className="text-gray-200 text-sm leading-relaxed">Position your face clearly within the <span className="text-white font-semibold">dashed frame</span>.</p>
+                                                </li>
+                                                <li className="flex items-start gap-3">
+                                                    <div className="w-6 h-6 rounded-full bg-cyber/20 text-cyber flex items-center justify-center shrink-0 font-bold text-sm border border-cyber/50 mt-0.5">2</div>
+                                                    <p className="text-gray-200 text-sm leading-relaxed">Ensure you are in a <span className="text-white font-semibold">well-lit area</span> without glare.</p>
+                                                </li>
+                                                <li className="flex items-start gap-3">
+                                                    <div className="w-6 h-6 rounded-full bg-cyber/20 text-cyber flex items-center justify-center shrink-0 font-bold text-sm border border-cyber/50 mt-0.5">3</div>
+                                                    <p className="text-gray-200 text-sm leading-relaxed">Click the <span className="text-red-400 font-semibold">Record button</span> below and follow the prompts.</p>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                        
+                                        {/* Animated arrow pointing down */}
+                                        <div className="absolute bottom-32 animate-bounce text-white flex flex-col items-center">
+                                            <span className="text-sm font-bold tracking-widest uppercase mb-1 drop-shadow-md">Ready?</span>
+                                            <i className="fa-solid fa-arrow-down text-2xl drop-shadow-md"></i>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="absolute bottom-8 left-0 w-full flex justify-center z-30">
@@ -944,6 +1062,7 @@ export const Dashboard: React.FC = () => {
                     </div>
                 </div>
             )}
+
         </section>
     );
 };

@@ -17,8 +17,11 @@ Your capabilities in this simulated environment:
 2. Guiding the user on how to use the dashboard (activating camera, interpreting graphs).
 3. Analyzing specific "simulated" error codes if the user asks (e.g., "Error 404: Face Not Found").
 
+If the user asks about the creators or developers of this platform, let them know:
+"The creators of this platform are Asad Mujawar, Shreya Patil, Sakshi Vadgave, and Atharv Suryavanshi. They are a team of brilliant innovators dedicated to building secure, AI-driven solutions for the future."
+
 If the user asks about the technical stack, mention Google Gemini and MediaPipe.
-Keep responses concise, under 100 words unless asked for detailed explanations.
+CRITICAL INSTRUCTION: You MUST ALWAYS answer in very short, concise sentences. Keep every response under 2-3 sentences and under 40 words. Never provide long explanations. Get straight to the point.
 `;
 
 let chatSession: Chat | null = null;
@@ -117,14 +120,17 @@ export const analyzeIdentity = async (idImageBase64: string, liveImageBase64: st
                     },
                     { 
                         text: `You are an expert KYC forensic AI. I am providing two images:
-                        Image 1: An uploaded government ID document (e.g., Aadhar card, Passport).
+                        Image 1: An uploaded Indian Aadhar Card.
                         Image 2: A live selfie of the user.
                         
                         Perform the following checks:
-                        1. Document Authenticity: Does Image 1 look like a valid, untampered government ID? Are there signs of digital manipulation or is it a picture of a screen?
-                        2. Face Matching: Extract the face from the ID document (Image 1) and compare it to the live selfie (Image 2). You MUST act as a highly skeptical security auditor. Assume the two faces are DIFFERENT people unless proven otherwise. Compare the facial features: nose shape, eye distance, jawline, ear shape, and eyebrows. If there is ANY difference in these core biometric features, you MUST reject the match. We require a strict match (at least 95% similarity) to pass.
+                        0. Document Type: Is Image 1 an Indian Aadhar Card? If it is ANY other type of document (Passport, Driver's License, PAN card, etc.), you MUST set isReal to false, idMatch to false, and add "Invalid Document Type: Only Aadhar Card is supported" to the issues list.
+                        1. Document Authenticity: Does Image 1 look like a valid, untampered Indian Aadhar Card? Check for standard Aadhar features (fonts, layout, emblem, 12-digit format). Are there signs of digital manipulation or is it a picture of a screen?
+                        2. Face Matching: Extract the face from the Aadhar document (Image 1) and compare it to the live selfie (Image 2). You MUST act as a highly skeptical security auditor. Assume the two faces are DIFFERENT people unless proven otherwise. Compare the facial features: nose shape, eye distance, jawline, ear shape, and eyebrows. If there is ANY difference in these core biometric features, you MUST reject the match. We require a strict match (at least 95% similarity) to pass.
                         3. Liveness: Does the live selfie (Image 2) look like a real person and not a photo/screen?
-                        4. Data Extraction: Extract the Full Name and the ID Number (e.g., Aadhar number, Passport number) from the ID document (Image 1).
+                        4. Data Extraction: Extract the Full Name and the 12-digit Aadhar Number from the Aadhar card (Image 1).
+
+                        CRITICAL INSTRUCTION: Do NOT estimate, guess, or mention the user's age under any circumstances. Do not include age in the message or issues.
 
                         Return a JSON object strictly adhering to this schema:
                         {
@@ -276,6 +282,8 @@ export const analyzeFaceFrame = async (base64Image: string): Promise<AIAnalysisR
                         2. 2D Flatness or paper texture (holding up a printed photo).
                         3. Deepfake artifacts (blurring around edges, unnatural eye reflections, warping).
                         4. Natural lighting and micro-expressions (indicative of a real human).
+
+                        CRITICAL INSTRUCTION: Do NOT estimate, guess, or mention the user's age under any circumstances. Do not include age in the message or issues.
 
                         Return a JSON object strictly adhering to this schema:
                         {

@@ -1,15 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatMessage } from '../types';
 import { sendMessageToGemini } from '../services/geminiService';
-import { db, isFirebaseConfigured } from '../services/firebase';
-import { collection, addDoc, query, where, orderBy, onSnapshot, Timestamp, limit } from 'firebase/firestore';
-import { useAuth } from '../AuthContext';
 
 export const ChatWidget: React.FC = () => {
     const [isOpen, setIsOpen] = useState(false);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const { user } = useAuth();
     const [messages, setMessages] = useState<ChatMessage[]>([
         {
             id: 'init',
@@ -26,77 +22,26 @@ export const ChatWidget: React.FC = () => {
         }
     }, [messages, isOpen]);
 
-    // Fetch chat history from Firestore
-    useEffect(() => {
-        if (!user || !db) {
-            setMessages([
-                {
-                    id: 'init',
-                    text: "Namaste! I am your KYC Security Assistant. I can help explain why a face was rejected or guide you through the process. 🛡️",
-                    sender: 'ai',
-                    timestamp: Date.now()
-                }
-            ]);
-            return;
-        }
-
-        const q = query(
-            collection(db, 'chats'),
-            where('userId', '==', user.uid),
-            orderBy('timestamp', 'asc'),
-            limit(50)
-        );
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            if (snapshot.empty) {
-                setMessages([
-                    {
-                        id: 'init',
-                        text: "Namaste! I am your KYC Security Assistant. I can help explain why a face was rejected or guide you through the process. 🛡️",
-                        sender: 'ai',
-                        timestamp: Date.now()
-                    }
-                ]);
-            } else {
-                const historyData = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data(),
-                    timestamp: doc.data().timestamp?.toMillis() || Date.now()
-                })) as ChatMessage[];
-                setMessages(historyData);
-            }
-        });
-
-        return unsubscribe;
-    }, [user]);
-
     const toggleChat = () => setIsOpen(!isOpen);
 
     const handleSendMessage = async () => {
         if (!input.trim() || isLoading) return;
 
+        const currentInput = input.trim();
+        // Clear input and set loading immediately
+        setInput('');
+        setIsLoading(true);
+
         const generateId = () => typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString() + Math.random().toString();
 
         const userMsg: ChatMessage = {
             id: generateId(),
-            text: input.trim(),
+            text: currentInput,
             sender: 'user',
             timestamp: Date.now()
         };
 
-        if (user && db) {
-            await addDoc(collection(db, 'chats'), {
-                userId: user.uid,
-                text: userMsg.text,
-                sender: 'user',
-                timestamp: Timestamp.now()
-            });
-        } else {
-            setMessages(prev => [...prev, userMsg]);
-        }
-
-        setInput('');
-        setIsLoading(true);
+        setMessages(prev => [...prev, userMsg]);
 
         // Call Gemini Service
         const responseText = await sendMessageToGemini(userMsg.text);
@@ -108,16 +53,7 @@ export const ChatWidget: React.FC = () => {
             timestamp: Date.now()
         };
 
-        if (user && db) {
-            await addDoc(collection(db, 'chats'), {
-                userId: user.uid,
-                text: aiMsg.text,
-                sender: 'ai',
-                timestamp: Timestamp.now()
-            });
-        } else {
-            setMessages(prev => [...prev, aiMsg]);
-        }
+        setMessages(prev => [...prev, aiMsg]);
         
         setIsLoading(false);
     };
