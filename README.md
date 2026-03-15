@@ -5,11 +5,26 @@
 * **Team ID:** uyfDqdNFY3qFoOtevOYR
 * **Live Demo Link:** [https://kyc-sheild-e7fl.vercel.app?_vercel_share=2GNlKiF8BPclm1ij6fptPjo7fOOlI7jf](https://kyc-sheild-e7fl.vercel.app?_vercel_share=2GNlKiF8BPclm1ij6fptPjo7fOOlI7jf)
 
-## Tech Stack
+## Project Description
+
+**KYC Shield** is an advanced, AI-powered identity verification platform designed to detect deepfakes and prevent identity fraud during the Know Your Customer (KYC) process. 
+
+By leveraging the Google Gemini Vision API, the platform analyzes live facial captures against uploaded official documents (like an Aadhaar card) to ensure the user is a real, live human and not a static image, mask, or AI-generated deepfake. 
+
+**Key Features:**
+* **Document Verification:** Secure upload of official ID documents (e.g., Aadhaar) with direct links to download them if needed.
+* **Biometric Liveness Detection:** Real-time camera capture with interactive prompts (blinking, turning head, smiling) to verify physical presence.
+* **Deepfake Analysis:** Advanced AI analysis to detect synthetic media artifacts, texture inconsistencies, and spoofing attempts.
+* **Identity Matching:** Compares the live face capture with the uploaded ID document to confirm a match.
+* **Secure Certification:** Generates a downloadable, tamper-proof KYC certificate (PDF) upon successful verification.
+* **Interactive AI Assistant:** A built-in chatbot helps guide users through the process and explains any verification failures.
+
+## Technologies Used
 * **Frontend:** React, TypeScript, Tailwind CSS, Vite
-* **Backend/Database:** Firebase (Firestore, Authentication)
-* **AI/ML:** Google Gemini API (gemini-3-flash-preview) for Deepfake Detection & Liveness Check
-* **Other:** jsPDF (Certificate Generation)
+* **Backend & Database:** Firebase (Firestore, Authentication)
+* **AI & Machine Learning:** Google Gemini API (gemini-3-flash-preview) for Deepfake Detection, Liveness Check, and AI Chat Assistant
+* **PDF Generation:** jsPDF for secure KYC certificate generation
+* **Deployment:** Vercel
 
 ## Setup Instructions
 

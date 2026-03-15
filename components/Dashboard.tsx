@@ -723,6 +723,14 @@ export const Dashboard: React.FC = () => {
                                         )}
                                     </div>
 
+                                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 max-w-md w-full flex items-start gap-3">
+                                        <i className="fa-solid fa-triangle-exclamation text-yellow-600 mt-1"></i>
+                                        <div className="text-sm text-yellow-800">
+                                            <p className="font-bold mb-1">Location Accuracy Warning</p>
+                                            <p>For exact location verification, please turn off VPNs and ensure <strong>Precise Location</strong> is enabled in your device or browser settings before proceeding.</p>
+                                        </div>
+                                    </div>
+
                                     <div className="flex gap-4 mb-4">
                                         <button 
                                             onClick={() => setStage('START')} 
