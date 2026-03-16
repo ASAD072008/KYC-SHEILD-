@@ -143,7 +143,7 @@ export const Hero: React.FC = () => {
                     <iframe 
                         width="100%" 
                         height="100%" 
-                        src="https://www.youtube.com/embed/JXp6y8SHECg?autoplay=1" 
+                        src="https://www.youtube.com/embed/ubsElKFnOvc?autoplay=1" 
                         title="Demo Video" 
                         frameBorder="0" 
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
